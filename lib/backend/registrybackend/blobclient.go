@@ -19,6 +19,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/uber/kraken/utils/closers"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/uber/kraken/lib/backend"
 	"github.com/uber/kraken/lib/backend/backenderrors"
 	"github.com/uber/kraken/lib/backend/registrybackend/security"
+	"github.com/uber/kraken/utils/dockerutil"
 	"github.com/uber/kraken/utils/httputil"
 	"github.com/uber/kraken/utils/log"
 	"go.uber.org/zap"
@@ -112,7 +114,14 @@ func (c *BlobClient) Download(namespace, name string, dst io.Writer) error {
 }
 
 func (c *BlobClient) statHelper(namespace, name, query string, opts []httputil.SendOption) (*core.BlobInfo, error) {
-	URL := fmt.Sprintf(query, c.config.Address, namespace, name)
+	path := fmt.Sprintf(strings.TrimPrefix(query, "http://%s"), namespace, name)
+	URL := buildRegistryURL(c.config.Address, path)
+
+	// Add Accept header for manifest queries to support OCI media types
+	if query == _manifestquery {
+		opts = append(opts, httputil.SendHeaders(map[string]string{"Accept": dockerutil.GetSupportedManifestTypes()}))
+	}
+
 	resp, err := httputil.Head(
 		URL,
 		append(opts, httputil.SendAcceptedCodes(http.StatusOK))...,
@@ -132,7 +141,14 @@ func (c *BlobClient) statHelper(namespace, name, query string, opts []httputil.S
 }
 
 func (c *BlobClient) downloadHelper(namespace, name, query string, dst io.Writer, opts []httputil.SendOption) error {
-	URL := fmt.Sprintf(query, c.config.Address, namespace, name)
+	path := fmt.Sprintf(strings.TrimPrefix(query, "http://%s"), namespace, name)
+	URL := buildRegistryURL(c.config.Address, path)
+
+	// Add Accept header for manifest queries to support OCI media types
+	if query == _manifestquery {
+		opts = append(opts, httputil.SendHeaders(map[string]string{"Accept": dockerutil.GetSupportedManifestTypes()}))
+	}
+
 	resp, err := httputil.Get(
 		URL,
 		append(
@@ -153,6 +169,16 @@ func (c *BlobClient) downloadHelper(namespace, name, query string, dst io.Writer
 		return fmt.Errorf("copy: %s", err)
 	}
 	return nil
+}
+
+// buildRegistryURL constructs the proper URL for registry operations
+func buildRegistryURL(address, path string) string {
+	// Ensure address doesn't have trailing slash and path has leading slash
+	address = strings.TrimSuffix(address, "/")
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return "http://" + address + path
 }
 
 // Upload is not supported as users can push directly to registry.

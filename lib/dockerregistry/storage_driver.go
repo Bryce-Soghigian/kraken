@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/uber/kraken/core"
 
@@ -30,9 +31,31 @@ import (
 	"github.com/docker/distribution/registry/storage/driver/factory"
 )
 
-// The path layout in the storage backend is roughly as follows:
+// The path layout in the storage backend supports both Docker Registry v2 and OCI v1:
 //
-//		<root>/v2
+// Docker Registry v2 layout:
+//		<root>/docker/registry/v2
+//			-> repositories/
+// 				-><name>/
+// 					-> _manifests/
+// 						revisions
+//							-> <manifest digest path>
+//								-> link
+// 						tags/<tag>
+//							-> current/link
+// 							-> index
+//								-> <algorithm>/<hex digest>/link
+// 					-> _layers/
+// 						<layer links to blob store>
+// 					-> _uploads/<id>
+// 						data
+// 						startedat
+// 						hashstates/<algorithm>/<offset>
+//			-> blobs/<algorithm>
+//				<split directory content addressable storage>
+//
+// OCI v1 layout (same structure as v2, different prefix):
+//		<root>/oci/v1
 //			-> repositories/
 // 				-><name>/
 // 					-> _manifests/
@@ -85,6 +108,17 @@ func toDriverError(err error, path string) error {
 			Path:       path,
 		}
 	}
+
+	// Handle file handling errors gracefully to prevent 500 errors
+	if err != nil {
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "file already closed") {
+			log.Debugf("Handled file already closed error for path %s: %v", path, err)
+			// Don't propagate double-close errors as they're usually harmless
+			return nil
+		}
+	}
+
 	return err
 }
 
