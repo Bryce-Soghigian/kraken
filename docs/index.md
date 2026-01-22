@@ -31,6 +31,7 @@ Below is the visualization of a small Kraken cluster at work:
 - [Architecture](#architecture)
 - [Benchmark](#benchmark)
 - [Usage](#usage)
+- [OCI v1 Support](OCI.md)
 - [Comparison With Other Projects](#comparison-with-other-projects)
 - [Limitations](#limitations)
 - [Contributing](#contributing)
@@ -46,6 +47,9 @@ Following are some highlights of Kraken:
   - Supports arbitrarily large blobs/layers. We normally limit max size to 20G for best performance.
 - **Highly available**. No component is a single point of failure.
 - **Secure**. Support uploader authentication and data integrity protection through TLS.
+- **OCI v1 Support**. Kraken implements the OCI Distribution Specification v1, enabling it to serve
+  as a registry for OCI artifacts beyond Docker images, including Helm charts, Kubernetes manifests,
+  and other cloud-native artifacts. See [OCI.md](OCI.md) for details.
 - **Pluggable storage options**. Instead of managing data, Kraken plugs into reliable blob storage
   options, like S3, GCS, HDFS or another registry. The storage interface is simple and new options
   are easy to add.
