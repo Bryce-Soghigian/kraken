@@ -27,9 +27,23 @@ const _testDigestHex = "ff3a5c916c92643ff77519ffa742d3ec61b7f591b6b7504599d95a4a
 func TestBlobsPath(t *testing.T) {
 	d := core.DigestFixture()
 
-	result, err := GetBlobDigest(fmt.Sprintf("/v2/blobs/sha256/%s/%s/data", d.Hex()[:2], d.Hex()))
-	require.NoError(t, err)
-	require.Equal(t, d, result)
+	testCases := []struct {
+		name  string
+		input string
+	}{
+		{"docker v2 short path", fmt.Sprintf("/v2/blobs/sha256/%s/%s/data", d.Hex()[:2], d.Hex())},
+		{"docker v2 full path", fmt.Sprintf("/docker/registry/v2/blobs/sha256/%s/%s/data", d.Hex()[:2], d.Hex())},
+		{"oci v1 path", fmt.Sprintf("/oci/v1/blobs/sha256/%s/%s/data", d.Hex()[:2], d.Hex())},
+		{"oci v1 full path", fmt.Sprintf("/root/oci/v1/blobs/sha256/%s/%s/data", d.Hex()[:2], d.Hex())},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := GetBlobDigest(tc.input)
+			require.NoError(t, err)
+			require.Equal(t, d, result)
+		})
+	}
 }
 
 func TestBlobsPathNoMatch(t *testing.T) {
@@ -59,10 +73,14 @@ func TestRepositoriesPath(t *testing.T) {
 		input string
 		repo  string
 	}{
-		{"single namespace manifest", "/v2/repositories/kraken/_manifests", "kraken"},
-		{"single namespace upload", "/v2/repositories/kraken/_uploads", "kraken"},
-		{"single namespace layer", "/v2/repositories/kraken/_layers", "kraken"},
-		{"multiple namespace manifest", "/v2/repositories/namespace-foo/kraken/_manifests", "namespace-foo/kraken"},
+		{"docker v2 single namespace manifest", "/v2/repositories/kraken/_manifests", "kraken"},
+		{"docker v2 single namespace upload", "/v2/repositories/kraken/_uploads", "kraken"},
+		{"docker v2 single namespace layer", "/v2/repositories/kraken/_layers", "kraken"},
+		{"docker v2 multiple namespace manifest", "/v2/repositories/namespace-foo/kraken/_manifests", "namespace-foo/kraken"},
+		{"docker v2 full path", "/docker/registry/v2/repositories/kraken/_manifests", "kraken"},
+		{"oci v1 single namespace manifest", "/oci/v1/repositories/kraken/_manifests", "kraken"},
+		{"oci v1 multiple namespace manifest", "/oci/v1/repositories/namespace-foo/kraken/_manifests", "namespace-foo/kraken"},
+		{"oci v1 full path", "/root/oci/v1/repositories/kraken/_manifests", "kraken"},
 	}
 
 	for _, tc := range testCases {
@@ -130,8 +148,11 @@ func TestLayersPathGetDigest(t *testing.T) {
 		name  string
 		input string
 	}{
-		{"valid data path", fmt.Sprintf("kraken/_layers/sha256/%s/data", d.Hex())},
-		{"valid link path", fmt.Sprintf("kraken/_layers/sha256/%s/link", d.Hex())},
+		{"docker v2 data path", fmt.Sprintf("kraken/_layers/sha256/%s/data", d.Hex())},
+		{"docker v2 link path", fmt.Sprintf("kraken/_layers/sha256/%s/link", d.Hex())},
+		{"docker v2 full path", fmt.Sprintf("/v2/repositories/kraken/_layers/sha256/%s/data", d.Hex())},
+		{"oci v1 data path", fmt.Sprintf("/oci/v1/repositories/kraken/_layers/sha256/%s/data", d.Hex())},
+		{"oci v1 link path", fmt.Sprintf("/oci/v1/repositories/kraken/_layers/sha256/%s/link", d.Hex())},
 	}
 
 	for _, tc := range testCases {
@@ -196,8 +217,11 @@ func TestManifestsPathGetDigest(t *testing.T) {
 		name  string
 		input string
 	}{
-		{"valid tag digest", fmt.Sprintf("kraken/_manifests/tags/sometag/index/sha256/%s/link", d.Hex())},
-		{"valid revision digest", fmt.Sprintf("kraken/_manifests/revisions/sha256/%s/link", d.Hex())},
+		{"docker v2 tag digest", fmt.Sprintf("kraken/_manifests/tags/sometag/index/sha256/%s/link", d.Hex())},
+		{"docker v2 revision digest", fmt.Sprintf("kraken/_manifests/revisions/sha256/%s/link", d.Hex())},
+		{"docker v2 full path", fmt.Sprintf("/v2/repositories/kraken/_manifests/revisions/sha256/%s/link", d.Hex())},
+		{"oci v1 tag digest", fmt.Sprintf("/oci/v1/repositories/kraken/_manifests/tags/sometag/index/sha256/%s/link", d.Hex())},
+		{"oci v1 revision digest", fmt.Sprintf("/oci/v1/repositories/kraken/_manifests/revisions/sha256/%s/link", d.Hex())},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -237,8 +261,11 @@ func TestManifestsPathGetTag(t *testing.T) {
 		tag       string
 		isCurrent bool
 	}{
-		{"valid tag index", "kraken/_manifests/tags/sometag/index/sha256/manifestdigest/link", "sometag", false},
-		{"valid tag current", "kraken/_manifests/tags/sometag/current/link", "sometag", true},
+		{"docker v2 tag index", "kraken/_manifests/tags/sometag/index/sha256/manifestdigest/link", "sometag", false},
+		{"docker v2 tag current", "kraken/_manifests/tags/sometag/current/link", "sometag", true},
+		{"docker v2 full path", "/v2/repositories/kraken/_manifests/tags/sometag/current/link", "sometag", true},
+		{"oci v1 tag index", "/oci/v1/repositories/kraken/_manifests/tags/sometag/index/sha256/manifestdigest/link", "sometag", false},
+		{"oci v1 tag current", "/oci/v1/repositories/kraken/_manifests/tags/sometag/current/link", "sometag", true},
 	}
 
 	for _, tc := range testCases {

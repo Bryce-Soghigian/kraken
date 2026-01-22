@@ -34,6 +34,14 @@ func TestBlobPathConversion(t *testing.T) {
 			"ff85ceb9734a3c2fbb886e0f7cfc66b046eeeae953d8cb430dc5a7ace544b0e9",
 			"/root/docker/registry/v2/blobs/sha256/ff/ff85ceb9734a3c2fbb886e0f7cfc66b046eeeae953d8cb430dc5a7ace544b0e9/data",
 		}, {
+			OciTag,
+			"repo-bar:latest",
+			"/root/oci/v1/repositories/repo-bar/_manifests/tags/latest/current/link",
+		}, {
+			ShardedOciBlob,
+			"ff85ceb9734a3c2fbb886e0f7cfc66b046eeeae953d8cb430dc5a7ace544b0e9",
+			"/root/oci/v1/blobs/sha256/ff/ff85ceb9734a3c2fbb886e0f7cfc66b046eeeae953d8cb430dc5a7ace544b0e9/data",
+		}, {
 			Identity,
 			"foo/bar",
 			"/root/foo/bar",
@@ -79,6 +87,33 @@ func TestShardedDockerBlobErrors(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := ShardedDockerBlobPather{"/"}.BlobPath(name)
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestOciTagErrors(t *testing.T) {
+	for _, name := range []string{
+		"4dfa0d38b99b774aabfde9a62421ac787ab168369e92421df968c7348893b60c",
+		":",
+		"repo:",
+		":tag",
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := OciTagPather{"/"}.BlobPath(name)
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestShardedOciBlobErrors(t *testing.T) {
+	for _, name := range []string{
+		"4d",
+		":",
+		"",
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := ShardedOciBlobPather{"/"}.BlobPath(name)
 			require.Error(t, err)
 		})
 	}
