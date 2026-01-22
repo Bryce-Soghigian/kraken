@@ -20,6 +20,7 @@ import (
 
 	"github.com/docker/distribution"
 	"github.com/docker/distribution/manifest/manifestlist"
+	"github.com/docker/distribution/manifest/ocischema"
 	"github.com/docker/distribution/manifest/schema2"
 	"github.com/uber/kraken/core"
 )
@@ -27,6 +28,8 @@ import (
 const (
 	_v2ManifestType     = "application/vnd.docker.distribution.manifest.v2+json"
 	_v2ManifestListType = "application/vnd.docker.distribution.manifest.list.v2+json"
+	_ociManifestType    = "application/vnd.oci.image.manifest.v1+json"
+	_ociIndexType       = "application/vnd.oci.image.index.v1+json"
 )
 
 func ParseManifest(r io.Reader) (distribution.Manifest, core.Digest, error) {
@@ -35,13 +38,26 @@ func ParseManifest(r io.Reader) (distribution.Manifest, core.Digest, error) {
 		return nil, core.Digest{}, fmt.Errorf("read: %s", err)
 	}
 
+	// Try Docker v2 manifest first
 	manifest, d, err := ParseManifestV2(b)
 	if err == nil {
 		return manifest, d, err
 	}
 
-	// Retry with v2 manifest list.
-	return ParseManifestV2List(b)
+	// Try OCI manifest
+	manifest, d, err = ParseOCIManifest(b)
+	if err == nil {
+		return manifest, d, err
+	}
+
+	// Try Docker v2 manifest list
+	manifest, d, err = ParseManifestV2List(b)
+	if err == nil {
+		return manifest, d, err
+	}
+
+	// Try OCI index
+	return ParseOCIIndex(b)
 }
 
 // ParseManifestV2 returns a parsed v2 manifest and its digest.
@@ -86,7 +102,43 @@ func ParseManifestV2List(bytes []byte) (distribution.Manifest, core.Digest, erro
 	return manifestList, d, nil
 }
 
-// GetManifestReferences returns a list of references by a V2 manifest
+// ParseOCIManifest returns a parsed OCI manifest and its digest.
+func ParseOCIManifest(bytes []byte) (distribution.Manifest, core.Digest, error) {
+	manifest, desc, err := distribution.UnmarshalManifest(_ociManifestType, bytes)
+	if err != nil {
+		return nil, core.Digest{}, fmt.Errorf("unmarshal oci manifest: %s", err)
+	}
+	deserializedManifest, ok := manifest.(*ocischema.DeserializedManifest)
+	if !ok {
+		return nil, core.Digest{}, errors.New("expected ocischema.DeserializedManifest")
+	}
+	version := deserializedManifest.Manifest.Versioned.SchemaVersion
+	if version != 2 {
+		return nil, core.Digest{}, fmt.Errorf("unsupported oci manifest version: %d", version)
+	}
+	d, err := core.ParseSHA256Digest(string(desc.Digest))
+	if err != nil {
+		return nil, core.Digest{}, fmt.Errorf("parse digest: %s", err)
+	}
+	return manifest, d, nil
+}
+
+// ParseOCIIndex returns a parsed OCI index and its digest.
+func ParseOCIIndex(bytes []byte) (distribution.Manifest, core.Digest, error) {
+	// Try using manifestlist for OCI index since they have similar structure
+	index, desc, err := distribution.UnmarshalManifest(_ociIndexType, bytes)
+	if err != nil {
+		return nil, core.Digest{}, fmt.Errorf("unmarshal oci index: %s", err)
+	}
+	// OCI index should implement the same interface as manifest list
+	d, err := core.ParseSHA256Digest(string(desc.Digest))
+	if err != nil {
+		return nil, core.Digest{}, fmt.Errorf("parse digest: %s", err)
+	}
+	return index, d, nil
+}
+
+// GetManifestReferences returns a list of references by a V2 or OCI manifest
 func GetManifestReferences(manifest distribution.Manifest) ([]core.Digest, error) {
 	var refs []core.Digest
 	for _, desc := range manifest.References() {
@@ -100,5 +152,5 @@ func GetManifestReferences(manifest distribution.Manifest) ([]core.Digest, error
 }
 
 func GetSupportedManifestTypes() string {
-	return fmt.Sprintf("%s,%s", _v2ManifestType, _v2ManifestListType)
+	return fmt.Sprintf("%s,%s,%s,%s", _v2ManifestType, _v2ManifestListType, _ociManifestType, _ociIndexType)
 }

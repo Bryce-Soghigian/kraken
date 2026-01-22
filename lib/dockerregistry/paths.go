@@ -82,7 +82,8 @@ func ParsePath(path string) (PathType, PathSubType, error) {
 
 // GetRepo returns repo name
 func GetRepo(path string) (string, error) {
-	re := regexp.MustCompile("^.+/repositories/(.+)/(?:_manifests|_layers|_uploads)")
+	// Support full paths, /v2/ prefixed paths, and OCI v1 paths
+	re := regexp.MustCompile("^(?:.*/)?(?:(?:docker/registry/)?v2|oci/v1)/repositories/(.+)/(?:_manifests|_layers|_uploads)")
 	matches := re.FindStringSubmatch(path)
 	if len(matches) < 2 {
 		return "", InvalidRegistryPathError{_repositories, path}
@@ -92,7 +93,8 @@ func GetRepo(path string) (string, error) {
 
 // GetBlobDigest returns blob digest
 func GetBlobDigest(path string) (core.Digest, error) {
-	re := regexp.MustCompile("^.+/blobs/sha256/[0-9a-z]{2}/([0-9a-z]+)/data$")
+	// Support full paths, /v2/ prefixed paths, and OCI v1 paths
+	re := regexp.MustCompile("^(?:.*/)?(?:(?:docker/registry/)?v2|oci/v1)/blobs/sha256/[0-9a-z]{2}/([0-9a-z]+)/data$")
 	matches := re.FindStringSubmatch(path)
 	if len(matches) < 2 {
 		return core.Digest{}, InvalidRegistryPathError{_blobs, path}
@@ -106,12 +108,13 @@ func GetBlobDigest(path string) (core.Digest, error) {
 
 // GetLayerDigest returns digest of the layer
 func GetLayerDigest(path string) (core.Digest, error) {
-	re := regexp.MustCompile("^.+/_layers/sha256/([0-9a-z]+)/(?:link|data)$")
+	// Support full paths, relative paths, and OCI v1 paths
+	re := regexp.MustCompile("^(?:.*/)?(?:(?:(?:docker/registry/)?v2|oci/v1)/repositories/)?(.+)/_layers/sha256/([0-9a-z]+)/(?:link|data)$")
 	matches := re.FindStringSubmatch(path)
-	if len(matches) < 2 {
+	if len(matches) < 3 {
 		return core.Digest{}, InvalidRegistryPathError{_layers, path}
 	}
-	d, err := core.NewSHA256DigestFromHex(matches[1])
+	d, err := core.NewSHA256DigestFromHex(matches[2])
 	if err != nil {
 		return core.Digest{}, fmt.Errorf("new digest: %s", err)
 	}
@@ -120,12 +123,13 @@ func GetLayerDigest(path string) (core.Digest, error) {
 
 // GetManifestDigest returns manifest or tag digest
 func GetManifestDigest(path string) (core.Digest, error) {
-	re := regexp.MustCompile("^.+/_manifests/(?:revisions|tags/.+/index)/sha256/([0-9a-z]+)/link$")
+	// Support full paths, relative paths, and OCI v1 paths
+	re := regexp.MustCompile("^(?:.*/)?(?:(?:(?:docker/registry/)?v2|oci/v1)/repositories/)?(.+)/_manifests/(?:revisions|tags/.+/index)/sha256/([0-9a-z]+)/link$")
 	matches := re.FindStringSubmatch(path)
-	if len(matches) < 2 {
+	if len(matches) < 3 {
 		return core.Digest{}, InvalidRegistryPathError{_manifests, path}
 	}
-	d, err := core.NewSHA256DigestFromHex(matches[1])
+	d, err := core.NewSHA256DigestFromHex(matches[2])
 	if err != nil {
 		return core.Digest{}, fmt.Errorf("new digest: %s", err)
 	}
@@ -134,51 +138,56 @@ func GetManifestDigest(path string) (core.Digest, error) {
 
 // GetManifestTag returns tag name
 func GetManifestTag(path string) (string, bool, error) {
-	re := regexp.MustCompile("^.+/_manifests/tags/([^/]+)/(current|index/sha256/[0-9a-z]+)/link$")
+	// Support full paths, relative paths, and OCI v1 paths
+	re := regexp.MustCompile("^(?:.*/)?(?:(?:(?:docker/registry/)?v2|oci/v1)/repositories/)?(.+)/_manifests/tags/([^/]+)/(current|index/sha256/[0-9a-z]+)/link$")
 	matches := re.FindStringSubmatch(path)
-	if len(matches) < 3 {
+	if len(matches) < 4 {
 		return "", false, InvalidRegistryPathError{_manifests, path}
 	}
-	if matches[2] == "current" {
-		return matches[1], true, nil
+	if matches[3] == "current" {
+		return matches[2], true, nil
 	}
-	return matches[1], false, nil
+	return matches[2], false, nil
 }
 
 // GetUploadUUID returns upload UUID
 func GetUploadUUID(path string) (string, error) {
-	re := regexp.MustCompile("^.+/_uploads/([^/]+)/(?:data$|startedat$|hashstates/[a-zA-Z0-9]+(?:/[0-9]+)?$)")
+	// Support full paths, relative paths, and OCI v1 paths
+	re := regexp.MustCompile("^(?:.*/)?(?:(?:(?:docker/registry/)?v2|oci/v1)/repositories/)?(.+)/_uploads/([^/]+)/(?:data$|startedat$|hashstates/[a-zA-Z0-9]+(?:/[0-9]+)?$)")
 	matches := re.FindStringSubmatch(path)
-	if len(matches) < 2 {
+	if len(matches) < 3 {
 		return "", InvalidRegistryPathError{_uploads, path}
 	}
-	return matches[1], nil
+	return matches[2], nil
 }
 
 // GetUploadAlgoAndOffset returns the algorithm and offset of the hashstates
 func GetUploadAlgoAndOffset(path string) (string, string, error) {
-	re := regexp.MustCompile("^.+/_uploads/[^/]+/hashstates/([a-zA-Z0-9]+)/([0-9]+)$")
+	// Support full paths, relative paths, and OCI v1 paths
+	re := regexp.MustCompile("^(?:.*/)?(?:(?:(?:docker/registry/)?v2|oci/v1)/repositories/)?(.+)/_uploads/[^/]+/hashstates/([a-zA-Z0-9]+)/([0-9]+)$")
 	matches := re.FindStringSubmatch(path)
-	if len(matches) < 3 {
+	if len(matches) < 4 {
 		return "", "", InvalidRegistryPathError{_uploads, path}
 	}
-	return matches[1], matches[2], nil
+	return matches[2], matches[3], nil
 }
 
 // matchManifestsPath returns true if it is a valid /_manifests path and returns the path subtype
 // Possible subtypes are tags and revisions
 func matchManifestsPath(path string) (bool, PathSubType) {
-	re := regexp.MustCompile("^.+/_manifests/(tags|revisions)(?:/.+/link)?$")
+	// Support full paths, relative paths, and OCI v1 paths
+	re := regexp.MustCompile("^(?:.*/)?(?:(?:(?:docker/registry/)?v2|oci/v1)/repositories/)?(.+)/_manifests/(tags|revisions)(?:/.+/link)?$")
 	matches := re.FindStringSubmatch(path)
-	if len(matches) < 2 {
+	if len(matches) < 3 {
 		return false, _invalidPathSubType
 	}
-	return true, PathSubType(matches[1])
+	return true, PathSubType(matches[2])
 }
 
 // matchBlobsPath returns true if it if a valid /blobs path and returns a subtype
 func matchBlobsPath(path string) (bool, PathSubType) {
-	re := regexp.MustCompile("^.+/blobs/sha256/[0-9a-z]{2}/[0-9a-z]+/data$")
+	// Support full paths, /v2/ prefixed paths, and OCI v1 paths
+	re := regexp.MustCompile("^(?:.*/)?(?:(?:docker/registry/)?v2|oci/v1)/blobs/sha256/[0-9a-z]{2}/[0-9a-z]+/data$")
 	ok := re.Match([]byte(path))
 	if !ok {
 		return false, _invalidPathSubType
@@ -188,27 +197,29 @@ func matchBlobsPath(path string) (bool, PathSubType) {
 
 // matchLayersPath returns true if it is a valid /_layers path and returns a subtype
 func matchLayersPath(path string) (bool, PathSubType) {
-	re := regexp.MustCompile("^.+/_layers/sha256/[0-9a-z]+/(link|data)$")
+	// Support full paths, relative paths, and OCI v1 paths
+	re := regexp.MustCompile("^(?:.*/)?(?:(?:(?:docker/registry/)?v2|oci/v1)/repositories/)?(.+)/_layers/sha256/[0-9a-z]+/(link|data)$")
 	matches := re.FindStringSubmatch(path)
-	if len(matches) < 2 {
+	if len(matches) < 3 {
 		return false, _invalidPathSubType
 	}
-	return true, PathSubType(matches[1])
+	return true, PathSubType(matches[2])
 }
 
 // matchUploadsPath returns true if it is a valid /_uploads path and returns the path subtype
 // Possible subtypes are data, startedat and hashstates
 func matchUploadsPath(path string) (bool, PathSubType) {
-	re := regexp.MustCompile("^.+/_uploads/[^/]+/(data$|startedat$|hashstates)")
+	// Support full paths, relative paths, and OCI v1 paths
+	re := regexp.MustCompile("^(?:.*/)?(?:(?:(?:docker/registry/)?v2|oci/v1)/repositories/)?(.+)/_uploads/[^/]+/(data$|startedat$|hashstates)")
 	matches := re.FindStringSubmatch(path)
-	if len(matches) < 2 {
+	if len(matches) < 3 {
 		return false, _invalidPathSubType
 	}
 
-	subtype := PathSubType(matches[1])
+	subtype := PathSubType(matches[2])
 	switch subtype {
 	case _hashstates:
-		re := regexp.MustCompile("^.+/_uploads/[^/]+/hashstates/[a-zA-Z0-9]+(?:/[0-9]+)?$")
+		re := regexp.MustCompile("^(?:.*/)?(?:(?:(?:docker/registry/)?v2|oci/v1)/repositories/)?(.+)/_uploads/[^/]+/hashstates/[a-zA-Z0-9]+(?:/[0-9]+)?$")
 		if !re.Match([]byte(path)) {
 			return false, _invalidPathSubType
 		}

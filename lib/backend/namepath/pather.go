@@ -25,6 +25,8 @@ import (
 const (
 	DockerTag         = "docker_tag"
 	ShardedDockerBlob = "sharded_docker_blob"
+	OciTag            = "oci_tag"
+	ShardedOciBlob    = "sharded_oci_blob"
 	Identity          = "identity"
 )
 
@@ -35,6 +37,10 @@ func New(root, id string) (Pather, error) {
 		return DockerTagPather{root}, nil
 	case ShardedDockerBlob:
 		return ShardedDockerBlobPather{root}, nil
+	case OciTag:
+		return OciTagPather{root}, nil
+	case ShardedOciBlob:
+		return ShardedOciBlobPather{root}, nil
 	case Identity:
 		return IdentityPather{root}, nil
 	case "":
@@ -120,6 +126,74 @@ func (p ShardedDockerBlobPather) NameFromBlobPath(bp string) (string, error) {
 	matches := re.FindStringSubmatch(bp)
 	if len(matches) != 2 {
 		return "", errors.New("invalid sharded docker blob path format")
+	}
+	return matches[1], nil
+}
+
+// OciTagPather generates paths for OCI tags.
+type OciTagPather struct {
+	root string
+}
+
+// BasePath returns the OCI registry repositories prefix.
+func (p OciTagPather) BasePath() string {
+	return path.Join(p.root, "oci/v1/repositories")
+}
+
+// BlobPath interprets name as a "repo:tag" and generates an OCI registry path for it.
+func (p OciTagPather) BlobPath(name string) (string, error) {
+	tokens := strings.Split(name, ":")
+	if len(tokens) != 2 {
+		return "", errors.New("name must be in format 'repo:tag'")
+	}
+	repo := tokens[0]
+	if len(repo) == 0 {
+		return "", errors.New("repo must be non-empty")
+	}
+	tag := tokens[1]
+	if len(tag) == 0 {
+		return "", errors.New("tag must be non-empty")
+	}
+	return path.Join(p.BasePath(), repo, "_manifests/tags", tag, "current/link"), nil
+}
+
+// NameFromBlobPath converts an OCI tag path back into repo:tag format.
+func (p OciTagPather) NameFromBlobPath(bp string) (string, error) {
+	re := regexp.MustCompile(p.BasePath() + "/(.+)/_manifests/tags/(.+)/current/link")
+	matches := re.FindStringSubmatch(bp)
+	if len(matches) != 3 {
+		return "", errors.New("invalid oci tag path format")
+	}
+	repo := matches[1]
+	tag := matches[2]
+	return fmt.Sprintf("%s:%s", repo, tag), nil
+}
+
+// ShardedOciBlobPather generates sharded paths for OCI blobs.
+type ShardedOciBlobPather struct {
+	root string
+}
+
+// BasePath returns the OCI registry blobs prefix.
+func (p ShardedOciBlobPather) BasePath() string {
+	return path.Join(p.root, "oci/v1/blobs")
+}
+
+// BlobPath interprets name as a SHA256 digest and returns an OCI registry path
+// which is sharded by the first two bytes.
+func (p ShardedOciBlobPather) BlobPath(name string) (string, error) {
+	if len(name) <= 2 {
+		return "", errors.New("name is too short, must be > 2 characters")
+	}
+	return path.Join(p.BasePath(), "sha256", name[:2], name, "data"), nil
+}
+
+// NameFromBlobPath converts a sharded OCI blob path back into raw hex format.
+func (p ShardedOciBlobPather) NameFromBlobPath(bp string) (string, error) {
+	re := regexp.MustCompile(p.BasePath() + "/sha256/../(.+)/data")
+	matches := re.FindStringSubmatch(bp)
+	if len(matches) != 2 {
+		return "", errors.New("invalid sharded oci blob path format")
 	}
 	return matches[1], nil
 }
